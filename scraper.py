@@ -6,6 +6,8 @@ It also includes an example usage of the function.
 
 import requests
 from bs4 import BeautifulSoup
+from collections import deque
+import urllib.parse
 
 def get_parsed_html(url: str):
     """
@@ -36,32 +38,50 @@ def get_parsed_html(url: str):
 
 # The following block executes only when the script is run directly (not imported as a module)
 if __name__ == "__main__":
-    # Define a sample URL for demonstration
-    sample_url = "http://example.com"
-    print(f"Attempting to scrape: {sample_url}")
-    
-    # Call the function to get the parsed HTML
-    parsed_html = get_parsed_html(sample_url)
+    # Define the starting URL and data structures for crawling
+    start_url = "http://example.com"
+    visited_urls = set()
+    urls_to_visit = deque([start_url])
+    max_pages = 50
+    pages_visited = 0
 
-    # Check if HTML parsing was successful
-    if parsed_html:
-        print("\nSuccessfully fetched and parsed HTML.")
-        # Find all anchor (<a>) tags in the parsed HTML
-        anchor_tags = parsed_html.find_all('a')
-        
-        # Check if any anchor tags were found
-        if anchor_tags:
-            print("\nFound the following links:")
-            # Iterate through the found anchor tags
-            for tag in anchor_tags:
-                # Get the value of the 'href' attribute (the link URL)
-                href = tag.get('href')
-                # Print the link if it exists
-                if href:
-                    print(href)
-        else:
-            # Message if no anchor tags are found
-            print("\nNo anchor tags with href found on the page.")
-    else:
-        # Message if HTML fetching or parsing failed
-        print(f"\nFailed to fetch or parse HTML from {sample_url}.")
+    print(f"Starting crawl from: {start_url}")
+
+    # Main crawling loop
+    while urls_to_visit and pages_visited < max_pages:
+        current_url = urls_to_visit.popleft()
+
+        if current_url in visited_urls:
+            continue
+
+        visited_urls.add(current_url)
+        pages_visited += 1
+        print(f"Crawling ({pages_visited}/{max_pages}): {current_url}")
+
+        parsed_html = get_parsed_html(current_url)
+
+        if not parsed_html:
+            print(f"Failed to fetch or parse HTML from {current_url}. Skipping.")
+            continue
+
+        # Extract all unique absolute links
+        anchor_tags = parsed_html.find_all('a', href=True)
+        for tag in anchor_tags:
+            href = tag.get('href')
+            if href:
+                # Join with base URL to handle relative links
+                absolute_link = urllib.parse.urljoin(current_url, href)
+                
+                # Normalize the URL (optional, but good practice)
+                # This helps in avoiding duplicate URLs due to minor differences
+                # For example, http://example.com/ and http://example.com
+                normalized_link = urllib.parse.urlparse(absolute_link)
+                absolute_link = normalized_link._replace(fragment="").geturl() # Remove fragment
+
+                if absolute_link not in visited_urls and absolute_link not in urls_to_visit:
+                    urls_to_visit.append(absolute_link)
+
+    print("\nCrawling finished.")
+    print(f"\nVisited URLs (total: {len(visited_urls)}):")
+    for url in visited_urls:
+        print(url)
